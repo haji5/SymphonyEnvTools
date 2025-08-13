@@ -23,7 +23,9 @@ MANIFEST
 
 # PyInstaller
 *.manifest
+# Exclude .spec files but allow build_exe.spec
 *.spec
+!build_exe.spec
 
 # IDE
 .idea/
