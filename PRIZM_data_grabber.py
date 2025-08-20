@@ -261,7 +261,7 @@ def select_opticks_social(driver):
         print(f"Error selecting Opticks Social: {e}")
         return False
 
-def process_target_set_with_variables(driver, target_name, iteration_index):
+def process_target_set_with_variables(driver, target_name, iteration_index, benchmark_choice="BC"):
     """Process a single target set with all 4 variable configurations"""
     try:
         wait = WebDriverWait(driver, 10)
@@ -310,9 +310,9 @@ def process_target_set_with_variables(driver, target_name, iteration_index):
                     print(f"Could not select target set: {target_name}")
                     continue
 
-                # Select British Columbia benchmark
-                if not select_british_columbia_benchmark(driver):
-                    print(f"Could not select British Columbia benchmark")
+                # Select benchmark based on user choice
+                if not select_benchmark(driver, benchmark_choice):
+                    print(f"Could not select {benchmark_choice} benchmark")
                     continue
 
                 # Select data source
@@ -371,7 +371,7 @@ def select_single_target_set(driver, target_name):
         print(f"Error selecting target set {target_name}: {e}")
         return False
 
-def select_target_sets(driver, target_set_names):
+def select_target_sets(driver, target_set_names, benchmark_choice="BC"):
     """Select target sets one by one, creating 4 dashboards for each"""
     try:
         print(f"Processing target sets: {target_set_names}")
@@ -379,7 +379,7 @@ def select_target_sets(driver, target_set_names):
         for i, target_name in enumerate(target_set_names):
             print(f"\n=== Processing target set {i+1}/{len(target_set_names)}: {target_name} ===")
 
-            if not process_target_set_with_variables(driver, target_name, i):
+            if not process_target_set_with_variables(driver, target_name, i, benchmark_choice):
                 print(f"Failed to process target set: {target_name}")
                 continue
 
@@ -392,90 +392,111 @@ def select_target_sets(driver, target_set_names):
         print(f"Error processing target sets: {e}")
         return False
 
-def select_british_columbia_benchmark(driver):
-    """Select British Columbia as the benchmark"""
+def select_benchmark(driver, benchmark_choice="BC"):
+    """Select benchmark (BC or Canada) based on user choice"""
     try:
         wait = WebDriverWait(driver, 10)
 
         # Wait for the benchmark table to load
         benchmark_table = wait.until(EC.presence_of_element_located((By.ID, "tbl-64dec1191446488db16dc83e40c62a7f")))
 
-        print("Selecting British Columbia benchmark...")
+        # Set search terms based on choice
+        if benchmark_choice.upper() == "CANADA":
+            search_term = "Canada"
+            print("Selecting Canada benchmark...")
+        else:  # Default to BC
+            search_term = "British Columbia"
+            print("Selecting British Columbia benchmark...")
 
-        # First check if BC is already selected
+        # First, use the search box to filter the benchmarks
         try:
-            selected_bc = driver.find_element(By.XPATH, "//tr[contains(.//span, 'British Columbia')]//i[@class='selector glyphicons selected circle_ok']")
-            if selected_bc:
-                print("British Columbia is already selected!")
+            search_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#tbl-64dec1191446488db16dc83e40c62a7f_filter input")))
+            search_input.clear()
+            search_input.send_keys(search_term)
+            print(f"Typed '{search_term}' into benchmark search box")
+            time.sleep(2)  # Wait for search to filter results
+        except Exception as e:
+            print(f"Could not use search box: {e}")
+
+        # Check if the benchmark is already selected (after search filtering)
+        try:
+            selected_benchmark = driver.find_element(By.XPATH, f"//tr[contains(.//span, '{search_term}')]//i[@class='selector glyphicons selected circle_ok']")
+            if selected_benchmark:
+                print(f"{benchmark_choice} is already selected!")
                 return True
         except:
             pass  # Not selected, continue with selection
 
-        # Method 1: Try to find British Columbia by text content
+        # Method 1: Try to find benchmark by text content (should be easier now with search filtering)
         try:
-            # Look for the row containing "British Columbia" text with unselected selector
-            bc_selector = wait.until(EC.element_to_be_clickable((By.XPATH, "//tr[contains(.//span, 'British Columbia')]//i[@class='selector glyphicons ok']")))
-            bc_selector.click()
-            print("British Columbia benchmark selected using text search!")
+            # Look for the row containing the benchmark text with unselected selector
+            benchmark_selector = wait.until(EC.element_to_be_clickable((By.XPATH, f"//tr[contains(.//span, '{search_term}')]//i[@class='selector glyphicons ok']")))
+            benchmark_selector.click()
+            print(f"{benchmark_choice} benchmark selected using text search!")
             time.sleep(2)
             return True
         except Exception as e:
-            print(f"Text search method failed: {e}")
+            print(f"Text search method failed for '{search_term}': {e}")
 
-        # Method 2: Search through all rows for BC
+        # Method 2: Search through visible rows (should be fewer after filtering)
         try:
             rows = driver.find_elements(By.CSS_SELECTOR, "#tbl-64dec1191446488db16dc83e40c62a7f tbody tr")
 
             for i, row in enumerate(rows):
                 row_text = row.text
-                if "British Columbia" in row_text or "Colombie-Britannique" in row_text:
-                    print(f"Found British Columbia in row {i+1}: {row_text}")
+                if search_term in row_text:
+                    print(f"Found {benchmark_choice} in row {i+1}: {row_text}")
                     # Find the unselected selector in this row
                     selector = row.find_element(By.CSS_SELECTOR, "i.selector.glyphicons.ok")
                     selector.click()
-                    print("British Columbia benchmark selected using row search!")
+                    print(f"{benchmark_choice} benchmark selected using row search!")
                     time.sleep(2)
                     return True
 
-            print("Could not find British Columbia in any row")
+            print(f"Could not find {benchmark_choice} in any visible row")
 
         except Exception as e:
             print(f"Row search method failed: {e}")
 
         # Method 3: JavaScript approach (last resort)
         try:
-            result = driver.execute_script("""
+            result = driver.execute_script(f"""
                 var table = document.getElementById('tbl-64dec1191446488db16dc83e40c62a7f');
                 var rows = table.getElementsByTagName('tr');
+                var searchTerm = '{search_term}';
                 
-                for (var i = 0; i < rows.length; i++) {
+                for (var i = 0; i < rows.length; i++) {{
                     var rowText = rows[i].textContent || rows[i].innerText;
-                    if (rowText.includes('British Columbia') || rowText.includes('Colombie-Britannique')) {
+                    if (rowText.includes(searchTerm)) {{
                         var selector = rows[i].querySelector('i.selector.glyphicons.ok');
-                        if (selector) {
+                        if (selector) {{
                             selector.click();
                             return true;
-                        }
-                    }
-                }
+                        }}
+                    }}
+                }}
                 return false;
             """)
 
             if result:
-                print("British Columbia benchmark selected using JavaScript!")
+                print(f"{benchmark_choice} benchmark selected using JavaScript!")
                 time.sleep(2)
                 return True
             else:
-                print("JavaScript method could not find unselected BC selector")
+                print(f"JavaScript method could not find unselected {benchmark_choice} selector")
         except Exception as e:
             print(f"JavaScript method failed: {e}")
 
-        print("All methods failed to select British Columbia benchmark")
+        print(f"All methods failed to select {benchmark_choice} benchmark")
         return False
 
     except Exception as e:
-        print(f"Error selecting British Columbia benchmark: {e}")
+        print(f"Error selecting {benchmark_choice} benchmark: {e}")
         return False
+
+def select_british_columbia_benchmark(driver):
+    """Legacy function - now calls the generic benchmark selector for BC"""
+    return select_benchmark(driver, "BC")
 
 def create_dashboard(driver, dashboard_name):
     """Enter dashboard name and click create dashboard button"""
@@ -537,6 +558,7 @@ class PrizmDataGrabberGUI:
         self.is_running = False
         self.automation_thread = None
         self.window_closed = False  # Add flag to track if window is closed
+        self.benchmark_choice = tk.StringVar(value="BC")  # Default to BC
 
         self.create_widgets()
         self.setup_logging()
@@ -554,24 +576,41 @@ class PrizmDataGrabberGUI:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(1, weight=1)
+        main_frame.rowconfigure(3, weight=1)  # Updated to accommodate new row
 
         # Title
         title_label = ttk.Label(main_frame, text="PRIZM Data Grabber", font=("Arial", 16, "bold"))
-        title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20))
+        title_label.grid(row=0, column=0, columnspan=4, pady=(0, 20))
+
+        # Benchmark selection frame
+        benchmark_frame = ttk.LabelFrame(main_frame, text="Benchmark Selection", padding="10")
+        benchmark_frame.grid(row=1, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(0, 10))
+
+        # Radio buttons for benchmark selection
+        bc_radio = ttk.Radiobutton(benchmark_frame, text="British Columbia",
+                                  variable=self.benchmark_choice, value="BC")
+        bc_radio.grid(row=0, column=0, sticky=tk.W, padx=(0, 20))
+
+        canada_radio = ttk.Radiobutton(benchmark_frame, text="Canada",
+                                      variable=self.benchmark_choice, value="CANADA")
+        canada_radio.grid(row=0, column=1, sticky=tk.W)
+
+        # Start button and progress bar frame
+        control_frame = ttk.Frame(main_frame)
+        control_frame.grid(row=2, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(0, 10))
+        control_frame.columnconfigure(1, weight=1)
 
         # Start button
-        self.start_button = ttk.Button(main_frame, text="Start Data Grabbing", command=self.start_automation)
-        self.start_button.grid(row=0, column=2, padx=(10, 0))
+        self.start_button = ttk.Button(control_frame, text="Start Data Grabbing", command=self.start_automation)
+        self.start_button.grid(row=0, column=0, padx=(0, 10))
 
         # Progress bar
-        self.progress = ttk.Progressbar(main_frame, mode='indeterminate')
-        self.progress.grid(row=0, column=3, padx=(10, 0), sticky=(tk.W, tk.E))
-        main_frame.columnconfigure(3, weight=1)
+        self.progress = ttk.Progressbar(control_frame, mode='indeterminate')
+        self.progress.grid(row=0, column=1, sticky=(tk.W, tk.E))
 
         # Log area label
         log_label = ttk.Label(main_frame, text="Console Output:")
-        log_label.grid(row=1, column=0, sticky=tk.W, pady=(10, 5))
+        log_label.grid(row=3, column=0, sticky=tk.W, pady=(10, 5))
 
         # Log text area with scrollbar
         self.log_text = scrolledtext.ScrolledText(
@@ -581,13 +620,13 @@ class PrizmDataGrabberGUI:
             state='disabled',
             font=("Consolas", 9)
         )
-        self.log_text.grid(row=2, column=0, columnspan=4, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        self.log_text.grid(row=4, column=0, columnspan=4, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
 
         # Status bar
         self.status_var = tk.StringVar()
         self.status_var.set("Ready to start")
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
-        status_bar.grid(row=3, column=0, columnspan=4, sticky=(tk.W, tk.E))
+        status_bar.grid(row=5, column=0, columnspan=4, sticky=(tk.W, tk.E))
 
     def setup_logging(self):
         """Setup logging redirection to GUI"""
@@ -621,7 +660,8 @@ class PrizmDataGrabberGUI:
     def run_automation(self):
         """Run the main automation function"""
         try:
-            main()
+            # Pass the benchmark choice to the main function
+            main(self.benchmark_choice.get())
         except Exception as e:
             print(f"Error in automation: {e}")
         finally:
@@ -653,7 +693,7 @@ def create_gui():
     app = PrizmDataGrabberGUI(root)
     root.mainloop()
 
-def main():
+def main(benchmark_choice="BC"):
     """Main function to run the automation"""
     driver = None
 
@@ -678,7 +718,7 @@ def main():
 
         # Process target sets - each will create 4 dashboards with different variables
         target_sets = ["The A-List", "Wealthy & Wise", "Asian Sophisticates", "Turbo Burbs", "First-Class Families", "Downtown Verve", "Mature & Secure", "Multiculture-ish", "Boomer Bliss", "Asian Achievement", "Modern Suburbia", "Eat, Play, Love", "Kick-Back Country", "South Asian Enterprise", "Savvy Seniors", "Asian Avenues", "Multicultural Corners", "Family Mode", "New Asian Heights", "Scenic Retirement", "Indieville", "Mid-City Mellow", "All-Terrain Families", "Suburban Sports", "Country Traditions", "Latte Life", "South Asian Society", "Metro Melting Pot", "Diverse & Determined", "New Country", "Middle-Class Mosaic", "Keep on Trucking", "Stressed in Suburbia", "Down to Earth", "Happy Medium", "Slow-Lane Suburbs", "Social Networkers", "Agri-Biz", "Backcountry Boomers", "Country & Western", "On Their Own Again", "Friends & Roomies", "Silver Flats", "Juggling Acts", "Old Town Roads", "Value Villagers", "Came From Away", "Suburban Recliners", "Midtown Movers", "Indigenous Families", "Just Getting By"]
-        if not select_target_sets(driver, target_sets):
+        if not select_target_sets(driver, target_sets, benchmark_choice):
             print("Could not process target sets. Please check the page manually.")
 
         print("All dashboards created successfully! Browser will remain open for further instructions.")
