@@ -35,8 +35,8 @@ def login_to_environics(driver):
         wait.until(EC.presence_of_element_located((By.ID, "Username")))
 
         # Set credentials
-        username = "charnley@symphonytourism.ca"
-        password = "Symphony&TOTA24!"
+        username = ""
+        password = ""
 
         # Find and fill username and password fields, then click button
         print("Entering username and password...")

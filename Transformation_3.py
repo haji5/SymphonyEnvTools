@@ -12,8 +12,8 @@ Directory = 'C:\\Users\\Downloads\\VisitorView Extract\\Prince George'
 
 # Digital credentials to log in to envronics
 
-username = "charnley@symphonytourism.ca"
-password = "Symphony&TOTA24!"
+username = ""
+password = ""
 
 def main_program():
     """Main program functionality"""
